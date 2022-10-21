@@ -1,3 +1,4 @@
+from datetime import datetime
 from ipykernel import kernel_protocol_version
 import pandas as pd
 from sklearn import cluster
@@ -53,7 +54,7 @@ def calcular_cluster(l_i1, l_i2, i1, i2, nomb):
 
 def obtener_datos():
     df = pd.read_csv('datos prep/test_p.csv')
-    df = df[:10]
+    df = df[:300]
     tfidfvectorizer = TfidfVectorizer(analyzer='word')
     tfidf_wm = tfidfvectorizer.fit_transform(df['text'])
     df_tfidfvect = pd.DataFrame(data = tfidf_wm.toarray())
@@ -71,6 +72,7 @@ def find(element, matrix):
     return(id[0])        
 
 
+print(datetime.now())
 f=obtener_datos()
 l_ord=[]
 global dict_clusters
@@ -108,9 +110,9 @@ while len(l_ord)>1:
     dnm_med=dnm_acc/len(l_ord)
     l_dnm_med.append(round(dnm_med, 2))
 np.savetxt("distancias.csv", l_dnm_med, delimiter=",")
-print(dict_clusters)
 with open('clusters.csv', 'w') as clusters_csv:
     writer = csv.writer(clusters_csv)
     for key in dict_clusters.keys():
         r = [key]+dict_clusters[key]
-        writer.writerow(r)            
+        writer.writerow(r)
+print(datetime.now())
