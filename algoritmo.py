@@ -89,6 +89,8 @@ for n in range (0, len(f)):
 dnm_med=dnm_acc/len(l_ord)
 l_dnm_med.append(round(dnm_med,2))
 nomb_cluster=1
+print('Distancias iniciales calculadas')
+print(datetime.now())
 while len(l_ord)>1:
     i1 = l_ord[0][1]
     i2 = l_ord[0][2]
