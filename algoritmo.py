@@ -1,10 +1,10 @@
 from datetime import datetime
-from ipykernel import kernel_protocol_version
 import pandas as pd
-from sklearn import cluster
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import csv
+
+n_instancias = 30
 
 def calcular_distancias(l1, l2, l_ord):
     dist=np.subtract(l1, l2)
@@ -54,7 +54,8 @@ def calcular_cluster(l_i1, l_i2, i1, i2, nomb):
 
 def obtener_datos():
     df = pd.read_csv('datos prep/test_p.csv')
-    df = df[:300]
+    global n_instancias
+    df = df[:n_instancias]
     tfidfvectorizer = TfidfVectorizer(analyzer='word')
     tfidf_wm = tfidfvectorizer.fit_transform(df['text'])
     df_tfidfvect = pd.DataFrame(data = tfidf_wm.toarray())
@@ -72,7 +73,7 @@ def find(element, matrix):
     return(id[0])        
 
 
-print(datetime.now())
+
 f=obtener_datos()
 l_ord=[]
 global dict_clusters
@@ -89,8 +90,6 @@ for n in range (0, len(f)):
 dnm_med=dnm_acc/len(l_ord)
 l_dnm_med.append(round(dnm_med,2))
 nomb_cluster=1
-print('Distancias iniciales calculadas')
-print(datetime.now())
 while len(l_ord)>1:
     i1 = l_ord[0][1]
     i2 = l_ord[0][2]
@@ -110,11 +109,10 @@ while len(l_ord)>1:
         dnm_acc=dnm+dnm_acc 
     f.append(nuevo_cluster)
     dnm_med=dnm_acc/len(l_ord)
-    l_dnm_med.append(round(dnm_med, 2))
+    l_dnm_med.append(round(dnm_med, 2))  
 np.savetxt("distancias.csv", l_dnm_med, delimiter=",")
 with open('clusters.csv', 'w') as clusters_csv:
     writer = csv.writer(clusters_csv)
     for key in dict_clusters.keys():
         r = [key]+dict_clusters[key]
         writer.writerow(r)
-print(datetime.now())
