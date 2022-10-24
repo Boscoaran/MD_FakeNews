@@ -1,10 +1,13 @@
 from datetime import datetime
+from inflect import print3
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import csv
 
-n_instancias = 30
+n_instancias = 20
+global dict_clusters
+k = 7
 
 def calcular_distancias(l1, l2, l_ord):
     dist=np.subtract(l1, l2)
@@ -52,9 +55,8 @@ def calcular_cluster(l_i1, l_i2, i1, i2, nomb):
     return nuevo_cluster    
 
 
-def obtener_datos():
+def preprocesar():
     df = pd.read_csv('datos prep/test_p.csv')
-    global n_instancias
     df = df[:n_instancias]
     tfidfvectorizer = TfidfVectorizer(analyzer='word')
     tfidf_wm = tfidfvectorizer.fit_transform(df['text'])
@@ -72,12 +74,35 @@ def find(element, matrix):
             id.append(i)
     return(id[0])        
 
+def cohesion_interna(df_resultados, instancias):
+    cohesion_particion=0
+    cohesion_cluster=[]
+    for idx in df_resultados.index:
+        centroide=df_resultados['centroide'][idx]
+        cohesion_cluster_acc=0
+        for instacia in df_resultados['instancias'][idx]:
+            pos_instacia=instancias[instacia-1][1:]
+            cohesion_cluster_acc=cohesion_cluster_acc+distancia_cuadratica(centroide, pos_instacia)
+        cohesion_cluster.append(cohesion_cluster_acc)
+        cohesion_particion=cohesion_particion+cohesion_cluster_acc
+    df_resultados['cohesion']=cohesion_cluster
+    return(df_resultados, cohesion_particion)
+
+def distancia_cuadratica(x, y):
+    acc=0
+    for a, b in zip(x, y):
+        acc=acc+pow((a-b), 2)
+    return acc    
+              
 
 
-f=obtener_datos()
+
+
+#f=preprocesar()
+f0=[[1,1,1,1,1,1],[2,1,1,1,1,2],[3,1,1,1,1,0],[4,10,10,10,10,10],[5,10,10,10,10,11],[6,10,10,10,10,9],[7,20,20,20,20,20],[8,20,20,20,20,21],[9,20,20,20,20,19],[10,15,15,15,15,15]] 
+f=f0.copy()
 l_ord=[]
-global dict_clusters
-dict_clusters = {}
+dict_clusters={}
 dnm_acc=0
 l_dnm_med=[]
 for n in range (0, len(f)):
@@ -90,7 +115,7 @@ for n in range (0, len(f)):
 dnm_med=dnm_acc/len(l_ord)
 l_dnm_med.append(round(dnm_med,2))
 nomb_cluster=1
-while len(l_ord)>1:
+while len(l_ord)>k:
     i1 = l_ord[0][1]
     i2 = l_ord[0][2]
     l_ord=eliminar_distancias(i1, i2, l_ord)
@@ -109,10 +134,26 @@ while len(l_ord)>1:
         dnm_acc=dnm+dnm_acc 
     f.append(nuevo_cluster)
     dnm_med=dnm_acc/len(l_ord)
-    l_dnm_med.append(round(dnm_med, 2))  
+    l_dnm_med.append(round(dnm_med, 2)) 
 np.savetxt("distancias.csv", l_dnm_med, delimiter=",")
 with open('clusters.csv', 'w') as clusters_csv:
     writer = csv.writer(clusters_csv)
     for key in dict_clusters.keys():
         r = [key]+dict_clusters[key]
         writer.writerow(r)
+cluster=[]
+centroide=[]
+instacias=[]
+for i in f:
+    if 'c' not in str(i[0]):
+        c='i-'+str(i[0])
+        dict_clusters.update({c: [i[0]]})
+        i[0]=c
+    cluster.append(i[0])
+    centroide.append(i[1:])
+    instacias.append(dict_clusters[i[0]])
+    dic_resultados={'cluster': cluster, 'centroide': centroide, 'instancias': instacias}
+    resultados=pd.DataFrame(data=dic_resultados, columns=['cluster', 'instancias', 'centroide'])
+resultados, cohesion_particion=cohesion_interna(resultados, f0)
+print(resultados)
+print(cohesion_particion)
