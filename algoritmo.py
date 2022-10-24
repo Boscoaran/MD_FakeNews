@@ -3,8 +3,10 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import csv
+from sklearn.decomposition import PCA
 
 n_instancias = 30
+comp = 2
 
 def calcular_distancias(l1, l2, l_ord):
     dist=np.subtract(l1, l2)
@@ -55,7 +57,7 @@ def calcular_cluster(l_i1, l_i2, i1, i2, nomb):
 def obtener_datos():
     df = pd.read_csv('datos prep/test_p.csv')
     global n_instancias
-    df = df[:n_instancias]
+    #df = df[:n_instancias]
     tfidfvectorizer = TfidfVectorizer(analyzer='word')
     tfidf_wm = tfidfvectorizer.fit_transform(df['text'])
     df_tfidfvect = pd.DataFrame(data = tfidf_wm.toarray())
@@ -72,9 +74,14 @@ def find(element, matrix):
             id.append(i)
     return(id[0])        
 
-
+def pca(f):
+    pca = PCA(n_components=comp)
+    pca.fit(f)
+    X_train_PCAspace = pca.transform(f)
+    print(X_train_PCAspace)
 
 f=obtener_datos()
+pca(f)
 l_ord=[]
 global dict_clusters
 dict_clusters = {}
