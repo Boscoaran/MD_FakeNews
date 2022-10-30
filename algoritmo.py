@@ -1,20 +1,22 @@
-from datetime import datetime
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import csv
 from sklearn.decomposition import PCA
 
-n_instancias = 30
-comp = 2
+n_instancias = 20
+dict_clusters={}
+l_ord=[]
+k = 3
+resultados=pd.DataFrame()
 
-def calcular_distancias(l1, l2, l_ord):
+def calcular_distancias(l1, l2):
     dist=np.subtract(l1, l2)
     dist=[round(abs(ele),2) for ele in dist]
     dnm=round(np.sum(dist), 2)
-    return(l_ord, dnm)        
+    return(dnm)        
 
-def add_ord(In, Im, Dnm, l_ord):
+def add_ord(In, Im, Dnm):
     a=0
     b=len(l_ord)
     while a < b:
@@ -24,16 +26,14 @@ def add_ord(In, Im, Dnm, l_ord):
         else:
             a = mid+1
     l_ord.insert(a, [Dnm, In, Im])        
-    return (l_ord)
 
-def eliminar_distancias(i1, i2, l_ord):
+def eliminar_distancias(i1, i2):
     eliminar=[]
     for i in range (0, len(l_ord)):
         if l_ord[i][1]==i1 or l_ord[i][2]==i1 or l_ord[i][1]==i2 or l_ord[i][2]==i2:
             eliminar.append(i)       
     for i in sorted(eliminar, reverse=True): 
-        del l_ord[i]
-    return(l_ord)        
+        del l_ord[i]       
 
 def calcular_cluster(l_i1, l_i2, i1, i2, nomb):
     nuevo_cluster=[]
@@ -54,7 +54,7 @@ def calcular_cluster(l_i1, l_i2, i1, i2, nomb):
     return nuevo_cluster    
 
 
-def obtener_datos():
+def preprocesar():
     df = pd.read_csv('datos prep/test_p.csv')
     global n_instancias
     #df = df[:n_instancias]
@@ -64,8 +64,8 @@ def obtener_datos():
     n=tfidf_wm.shape[0]
     l = [item for item in range(1, n+1)]
     df_tfidfvect.insert(0, "id", l)
-    f = df_tfidfvect.values.tolist()
-    return(f)
+    datos = df_tfidfvect.values.tolist()
+    return(datos)
 
 def find(element, matrix):
     id=[]
@@ -74,52 +74,112 @@ def find(element, matrix):
             id.append(i)
     return(id[0])        
 
-def pca(f):
-    pca = PCA(n_components=comp)
-    pca.fit(f)
-    X_train_PCAspace = pca.transform(f)
-    print(X_train_PCAspace)
+def cohesion_interna():
+    cohesion_particion=0
+    cohesion_cluster=[]
+    for idx in resultados.index:
+        centroide=resultados['centroide'][idx]
+        cohesion_cluster_acc=0
+        for instacia in resultados['instancias'][idx]:
+            pos_instacia=f0[int(instacia-1)][1:]
+            cohesion_cluster_acc=cohesion_cluster_acc+distancia_cuadratica(centroide, pos_instacia)
+        cohesion_cluster.append(cohesion_cluster_acc)
+        cohesion_particion=cohesion_particion+cohesion_cluster_acc
+    resultados['cohesion interna']=cohesion_cluster
+    return(cohesion_particion)
 
-f=obtener_datos()
-pca(f)
-l_ord=[]
-global dict_clusters
-dict_clusters = {}
-dnm_acc=0
-l_dnm_med=[]
-for n in range (0, len(f)):
-    for m in range (n+1, len(f)):
-        l1=np.array(f[n][1:])
-        l2=np.array(f[m][1:])
-        l_ord, dnm = calcular_distancias(l1, l2, l_ord)
-        l_ord = add_ord(n+1, m+1, dnm, l_ord)
-        dnm_acc=dnm_acc+dnm
-dnm_med=dnm_acc/len(l_ord)
-l_dnm_med.append(round(dnm_med,2))
-nomb_cluster=1
-while len(l_ord)>1:
+def disimilitud_externa():
+    dep=0           #disimilitud externa particion
+    l_dec=[]        #lista disimilitud externa cluster
+    for idx in resultados.index:
+        centroide=resultados['centroide'].drop(idx)
+        dec=0       #disimilitud externa cluster  
+        for instancia in resultados['instancias'][idx]:
+            pos_instancia=f0[int(instancia-1)][1:]
+            dei=0       #disimilitud externa instancia
+            for c in centroide:
+                dei=dei+distancia_cuadratica(c, pos_instancia)
+            dec=dec+dei        
+        dep=dep+dec    
+        l_dec.append(dec)
+    resultados['disimilitud externa']=l_dec
+    return(dep)          
+
+def separabilidad_externa():
+    centroide_conjunto=[]
+    l_centroides=resultados['centroide']
+    for i in range(0, len(l_centroides[0])):
+        acc_centroide=0
+        for centroide in l_centroides:
+            acc_centroide=acc_centroide+centroide[i]
+        centroide_conjunto.append(acc_centroide/len(l_centroides))
+    separabilidad_particion=0    
+    for centroide in l_centroides:
+        separabilidad_particion=distancia_cuadratica(centroide_conjunto, centroide)+separabilidad_particion
+    separabilidad_particion=separabilidad_particion*len(l_centroides)    
+    return(separabilidad_particion)  
+
+def distancia_cuadratica(x, y):
+    acc=0
+    for a, b in zip(x, y):
+        acc=acc+pow((a-b), 2)
+    return acc    
+              
+def distancias_iniciales():
+    for n in range (0, len(f)):
+        for m in range (n+1, len(f)):
+            l1=np.array(f[n][1:])
+            l2=np.array(f[m][1:])
+            dnm = calcular_distancias(l1, l2)
+            add_ord(n+1, m+1, dnm)
+
+def unir_clusters_cercanos(n_cluster):
     i1 = l_ord[0][1]
     i2 = l_ord[0][2]
-    l_ord=eliminar_distancias(i1, i2, l_ord)
+    eliminar_distancias(i1, i2)
     id1=find(i1, f)
     id2=find(i2, f)
-    nuevo_cluster=calcular_cluster(f[id1][1:], f[id2][1:], i1, i2, nomb_cluster)
-    nomb_cluster=nomb_cluster+1
+    nuevo_cluster=calcular_cluster(f[id1][1:], f[id2][1:], i1, i2, n_cluster)
     instancias_eliminar=[id1, id2]
     for i in sorted(instancias_eliminar, reverse=True):
-        del f[i]      
+        del f[i] 
     for n in range (0, len(f)):
         l1=np.array(f[n][1:])
         l2=np.array(nuevo_cluster[1:])
-        l_ord, dnm=calcular_distancias(l1, l2, l_ord)
-        l_ord=add_ord(f[n][0], nuevo_cluster[0], dnm, l_ord)
-        dnm_acc=dnm+dnm_acc 
-    f.append(nuevo_cluster)
-    dnm_med=dnm_acc/len(l_ord)
-    l_dnm_med.append(round(dnm_med, 2))  
-np.savetxt("distancias.csv", l_dnm_med, delimiter=",")
-with open('clusters.csv', 'w') as clusters_csv:
-    writer = csv.writer(clusters_csv)
-    for key in dict_clusters.keys():
-        r = [key]+dict_clusters[key]
-        writer.writerow(r)
+        dnm=calcular_distancias(l1, l2)
+        add_ord(f[n][0], nuevo_cluster[0], dnm)
+    f.append(nuevo_cluster) 
+
+def calcular_metricas():
+    cluster=[]
+    centroide=[]
+    instacias=[]
+    for i in f:
+        if 'c' not in str(i[0]):
+            c='i-'+str(i[0])
+            dict_clusters.update({c: [i[0]]})
+            i[0]=c
+        cluster.append(i[0])
+        centroide.append(i[1:])
+        instacias.append(dict_clusters[i[0]])
+        dic_resultados={'cluster': cluster, 'centroide': centroide, 'instancias': instacias}
+        global resultados
+        resultados=pd.DataFrame(data=dic_resultados, columns=['cluster', 'instancias', 'centroide'])   
+
+def imprimir_resultados():
+    print('Resultados para '+str(k)+' clusters:')
+    print(resultados)
+    print('\n')
+    print('Metricas de la particion:')
+    print('     -Cohesion interna: ' + str(cohesion_interna()))
+    print('     -Sisimilitud externa: '+ str(disimilitud_externa()))
+    print('     -Separabilidad: ' + str(separabilidad_externa()))
+
+#f0=[[1,1,1,1,1,1],[2,1,1,1,1,2],[3,1,1,1,1,0],[4,10,10,10,10,10],[5,10,10,10,10,11],[6,10,10,10,10,9],[7,20,20,20,20,20],[8,20,20,20,20,21],[9,20,20,20,20,19],[10,15,15,15,15,15]] 
+f0=preprocesar()                                #obtiene los datos y los preprocesa para el algoritmo
+f=f0.copy()                                     #f0 mantiene las instancias iniciales, f contiene las instancias/clusters a lo largo del algoritmo
+distancias_iniciales()                          #calcula las disntancias iniciales ente instancias y las ordena [instancia1, instancia2, distancia]
+for nuevo_cluster in range(len(f0)-k):          #iteraciones del algoritmo hasta que en que queden k clusters
+    unir_clusters_cercanos(nuevo_cluster)       #une los dos clusters más cercanos, c-(nuevo_cluster) es el nombre del nuevo cluster (c-1, c-2...) si un cluster solo esta formado por una instancia sera i-numero instancia
+calcular_metricas()                             #prepara los datos para calcular las metricas y diseña la matriz de resultados
+imprimir_resultados()                           #imprime la matriz con los resultados y las metricas (cohesion interna, disimilitud externa y separabilidad externa)
