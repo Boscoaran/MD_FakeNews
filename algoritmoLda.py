@@ -2,7 +2,8 @@ from datetime import datetime
 from ipykernel import kernel_protocol_version
 import pandas as pd
 from sklearn import cluster
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import LatentDirichletAllocation, TruncatedSVD
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 import numpy as np
 import csv
 import gensim
