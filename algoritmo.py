@@ -1,18 +1,22 @@
 from cmath import inf
 import string
-import time
+from matplotlib import pyplot as plt
 import pandas as pd
 import numpy as np
 from nltk.stem import WordNetLemmatizer, PorterStemmer
 from nltk.corpus import stopwords
 import gensim
+import csv
+from sklearn.decomposition import PCA
 
-n_instancias = 1000
-n_topicos = 100
+pd.set_option('mode.chained_assignment', None)
+n_instancias = 400
+n_topicos = 5
 dict_clusters={}
 l_ord=[]
-k = 5
+k = 10
 resultados=pd.DataFrame()
+f0=[]
  
 def add_ord(In, Im, Dnm):
     a=0
@@ -95,7 +99,8 @@ def lda():
     id2word = gensim.corpora.Dictionary(f0['text'])
     id2word.save("id2word")
     corpus = [id2word.doc2bow(doc) for doc in f0['text']]
-    lda_model = gensim.models.LdaMulticore(corpus=corpus, id2word=id2word, num_topics=n_topicos)
+    lda_model = gensim.models.LdaMulticore(corpus=corpus, id2word=id2word, num_topics=n_topicos, random_state=4)
+    #lda_model = gensim.models.LdaMulticore.load("lda_model")
     doc_lda = lda_model[corpus]
     lda_model.save("lda_model")
 
@@ -107,6 +112,18 @@ def lda():
             matrix[i][e[0]+1] = e[1]
         i+=1
     return(matrix)    
+
+def representarPCA():
+    pca = PCA(n_components=2)
+    pca.fit(f0)
+    X_train_PCAspace = pca.transform(f0)
+    print('Dim after PCA: ',X_train_PCAspace.shape)
+    samples = 900
+    sc = plt.scatter(X_train_PCAspace[:samples,0],X_train_PCAspace[:samples,1], cmap=plt.cm.get_cmap('nipy_spectral', 10))
+    plt.colorbar()
+    #for i in range(samples):
+    #    plt.text(X_train_PCAspace[i,0],X_train_PCAspace[i,1], df_number[i])
+    plt.show()
 
 def text_to_topics(text):
     wnl = WordNetLemmatizer()
@@ -188,7 +205,7 @@ def separabilidad_externa():
 def distancia_cuadratica(x, y):
     acc=0
     for a, b in zip(x, y):
-        acc=acc+pow((a-b), 2)
+        acc=acc+pow((float(a)-b), 2)
     return acc    
               
 def distancias_iniciales():
@@ -223,14 +240,16 @@ def calcular_metricas():
     for i in f:
         if 'c' not in str(i[0]):
             c='i-'+str(int(i[0]))
-            dict_clusters.update({c: [i[0]]})
+            dict_clusters.update({c: [int(i[0])]})
             i[0]=c
         cluster.append(i[0])
         centroide.append(i[1:])
         instacias.append(dict_clusters[i[0]])
         dic_resultados={'cluster': cluster, 'centroide': centroide, 'instancias': instacias}
         global resultados
-        resultados=pd.DataFrame(data=dic_resultados, columns=['cluster', 'instancias', 'centroide'])   
+        resultados=pd.DataFrame(data=dic_resultados, columns=['cluster', 'instancias', 'centroide'])
+        instancias_por_cluster=[len(resultados['instancias'][i]) for i in range(len(resultados))]
+        resultados['N instancias']=instancias_por_cluster
 
 def imprimir_resultados():
     cohesion=cohesion_interna()
@@ -244,10 +263,31 @@ def imprimir_resultados():
     print('     -Disimilitud externa: '+ str(disimilitud))
     print('     -Separabilidad: ' + str(separabilidad))
 
+def instancias_cercanas(values, instancias):
+    i1=0
+    i2=0
+    dmin1=inf
+    dmin2=inf
+    for i in instancias:
+        instancia=f0[int(i)][1:0]
+        d=distancia_cuadratica(values, instancia)
+        if d<dmin1:
+            i2=i1
+            i1=i
+            dmin2=dmin1    
+            dmin1=d
+        elif d<dmin2:
+            i2=i
+            dmin2=d
+    return(i1, i2)        
+
+
 def add_new_input_cluster():
     print('\nIntroduce un texto en Inglés:\n')
     new_text=input()
     new_values=text_to_topics(new_text)
+    print('\nTras el LDA los atributos de la instancia son:\n')
+    print(new_values)
     cluster_cercano=inf
     for index, row in resultados.iterrows():
         d=distancia_cuadratica(row['centroide'], new_values[1:])
@@ -255,28 +295,57 @@ def add_new_input_cluster():
             cluster_cercano = d
             cluster_id = index
     print('\nLa instancia se va a añadir al cluster:')        
-    print(resultados.iloc[[cluster_id]])      
+    print(resultados.iloc[[cluster_id]]) 
     print('\nEl nuevo centroide sería:')
     nuevo_centroide=[]
     num_clusters=len(resultados['instancias'][cluster_id])
     for i in range(0, len(new_values)-1):
-        nuevo_centroide.append(abs(round((resultados['centroide'][cluster_id][i]*num_clusters+new_values[i+1])/(1+num_clusters),2)))
+        nuevo_centroide.append(abs(round((float(resultados['centroide'][cluster_id][i])*num_clusters+new_values[i+1])/(1+num_clusters),5)))
     print(nuevo_centroide)
+    print('\nLas dos instancias más cercanas son:')
+    i1,i2 = instancias_cercanas(new_values, resultados['instancias'][cluster_id])
+    print(str(f0[int(i1)]))
+    print(str(f0[int(i2)]))
+    r=input('Mostrar textos (s/n): ')
+    if r == 's':
+        df = pd.read_csv('datos/test.csv')
+        print('\nTexto 1:\n')
+        print(df['text'][int(i1)])
+        print('\nTexto 2:\n')
+        print(df['text'][int(i2)])
 
 
-#f0=[[1,1,1,1,1,1],[2,1,1,1,1,2],[3,1,1,1,1,0],[4,10,10,10,10,10],[5,10,10,10,10,11],[6,10,10,10,10,9],[7,20,20,20,20,20],[8,20,20,20,20,21],[9,20,20,20,20,19],[10,15,15,15,15,15]] 
-start_time = time.time()
-f0=cargar_datos()                              #obtiene los datos y los preprocesa para el algoritmo
-print('Datos cargados y preprocesados')
-f0=lda().tolist()
-print('LDA completado')
-f=f0.copy()                                     #f0 mantiene las instancias iniciales, f contiene las instancias/clusters a lo largo del algoritmo
-distancias_iniciales()                          #calcula las disntancias iniciales ente instancias y las ordena [instancia1, instancia2, distancia]
-print('Distancias iniciales calculadas')
-for nuevo_cluster in range(len(f0)-k):          #iteraciones del algoritmo hasta que en que queden k clusters
-    unir_clusters_cercanos(nuevo_cluster)       #une los dos clusters más cercanos, c-(nuevo_cluster) es el nombre del nuevo cluster (c-1, c-2...) si un cluster solo esta formado por una instancia sera i-numero instancia
-calcular_metricas()                             #prepara los datos para calcular las metricas y diseña la matriz de resultados
-imprimir_resultados()                           #imprime la matriz con los resultados y las metricas (cohesion interna, disimilitud externa y separabilidad externa)
-print("\n--- %s seconds ---" % (time.time() - start_time))
-add_new_input_cluster()
-   
+if __name__=='__main__':
+    #f0=[[1,1,1,1,1,1],[2,1,1,1,1,2],[3,1,1,1,1,0],[4,10,10,10,10,10],[5,10,10,10,10,11],[6,10,10,10,10,9],[7,20,20,20,20,20],[8,20,20,20,20,21],[9,20,20,20,20,19],[10,15,15,15,15,15]] 
+    print('1. Cargar datos y ejecutar algoritmo')
+    print('2. Cargar modelo y clasificar instancia')
+    respuesta = input()
+    if respuesta==str(1):
+        f0=cargar_datos()                              #obtiene los datos y los preprocesa para el algoritmo
+        print('Datos cargados y preprocesados')
+        f0=lda().tolist()
+        print('LDA completado')
+        representarPCA()
+        f=f0.copy()                                     #f0 mantiene las instancias iniciales, f contiene las instancias/clusters a lo largo del algoritmo
+        distancias_iniciales()                          #calcula las disntancias iniciales ente instancias y las ordena [instancia1, instancia2, distancia]
+        print('Distancias iniciales calculadas')
+        for nuevo_cluster in range(len(f0)-k):          #iteraciones del algoritmo hasta que en que queden k clusters
+            unir_clusters_cercanos(nuevo_cluster)       #une los dos clusters más cercanos, c-(nuevo_cluster) es el nombre del nuevo cluster (c-1, c-2...) si un cluster solo esta formado por una instancia sera i-numero instancia
+        calcular_metricas()                             #prepara los datos para calcular las metricas y diseña la matriz de resultados
+        imprimir_resultados()                           #imprime la matriz con los resultados y las metricas (cohesion interna, disimilitud externa y separabilidad externa)
+        resultados.to_csv('resultados.csv')
+        with open('f0.csv', 'w') as file:
+            wr=csv.writer(file, quoting=csv.QUOTE_ALL)
+            wr.writerow(f0)
+    elif respuesta==str(2):
+        resultados=pd.read_csv('resultados.csv', index_col=0)
+        for i in  range(len(resultados)):
+            resultados['centroide'][i]=resultados['centroide'][i][1:-1].split(',')
+            resultados['instancias'][i]=resultados['instancias'][i][1:-1].split(',')   
+        with open('f0.csv') as f:
+            reader=csv.reader(f)
+            f0=list(reader)[0]
+        for i in range(len(f0)):
+            f0[i]=f0[i][1:-1].split(',') 
+            f0[i][0]=int(round(float(f0[i][0]),0))
+        add_new_input_cluster()
